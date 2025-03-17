@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 
 import logging
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardRemove,
+)
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -19,6 +24,15 @@ logger = logging.getLogger(__name__)
 
 API_URL = "http://127.0.0.1:5001/api"
 
+# Состояния диалога
+STATE_MAIN = "main"
+STATE_PRODUCTS = "products"
+STATE_REFUND = "refund"
+def get_products():
+    return ["Product 1", "Product 2", "Product 3"]
+
+# Обработка команды отмены
+cancel_keyboard = [[KeyboardButton("Главное меню")]]
 
 async def start(update: Update, context: CallbackContext) -> None:
     keyboard = [
@@ -28,8 +42,32 @@ async def start(update: Update, context: CallbackContext) -> None:
     ]
     await update.message.reply_text(
         "Выберите действие:",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard, resize_keyboard=False, one_time_keyboard=True),
     )
+    context.user_data['state'] = STATE_MAIN
+
+async def main_state_handler(update: Update, context: CallbackContext) -> None:
+    text = update.message.text
+    user_id = update.message.from_user.id
+    user_data = context.user_data
+
+    if text == "Выбрать продукт":
+        user_data['state'] = STATE_PRODUCTS
+        res = await show_products(update, user_id)
+    elif text == "Мои заказы":
+        res = await show_orders(update, user_id)
+    elif text == "Вернуть заказ":
+        user_data['state'] = STATE_REFUND
+        res = await start_refund(update, user_id)
+    else:
+        await update.message.reply_text(
+            "Неизвестная команда",
+            reply_markup=ReplyKeyboardMarkup(
+                cancel_keyboard, resize_keyboard=False, one_time_keyboard=True))
+        res = False
+    if not res:
+        return await start(update, context)
 
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
@@ -38,17 +76,9 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     user_data = context.user_data
 
     try:
-        # Состояния диалога
-        STATE_MAIN = "main"
-        STATE_PRODUCTS = "products"
-        STATE_REFUND = "refund"
-
         # Инициализация состояния
         if 'state' not in user_data:
             user_data['state'] = STATE_MAIN
-
-        # Обработка команды отмены
-        cancel_keyboard = [[KeyboardButton("Главное меню")]]
 
         if text == "Главное меню":
             user_data['state'] = STATE_MAIN
@@ -56,46 +86,37 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
 
         # Обработка по текущему состоянию
         if user_data['state'] == STATE_MAIN:
-            if text == "Выбрать продукт":
-                user_data['state'] = STATE_PRODUCTS
-                await show_products(update, user_id)
-            elif text == "Мои заказы":
-                await show_orders(update, user_id)
-            elif text == "Вернуть заказ":
-                user_data['state'] = STATE_REFUND
-                await start_refund(update, user_id)
-            else:
-                await update.message.reply_text(
-                    "Неизвестная команда",
-                    reply_markup=ReplyKeyboardMarkup(cancel_keyboard, resize_keyboard=True))
-
+            return await main_state_handler(update, context)
         elif user_data['state'] == STATE_PRODUCTS:
-            if text in ["Product 1", "Product 2", "Product 3"]:
+            if text in get_products():
                 await create_order(update, user_id, text)
-                user_data['state'] = STATE_MAIN
             else:
                 await update.message.reply_text(
                     "Некорректный выбор продукта",
-                    reply_markup=ReplyKeyboardMarkup(cancel_keyboard, resize_keyboard=True))
+                    reply_markup=ReplyKeyboardMarkup(
+                        cancel_keyboard, resize_keyboard=True))
+            return await start(update, context)
 
         elif user_data['state'] == STATE_REFUND:
             if await process_refund(update, user_id, text):
-                user_data['state'] = STATE_MAIN
+                return await start(update, context)
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         await update.message.reply_text(
-            "Произошла ошибка. Возврат в главное меню",
-            reply_markup=ReplyKeyboardMarkup(cancel_keyboard, resize_keyboard=True))
-        user_data['state'] = STATE_MAIN
+            f"Произошла ошибка {e}. Возврат в главное меню",
+            reply_markup=ReplyKeyboardMarkup(
+                cancel_keyboard, resize_keyboard=False, one_time_keyboard=True))
+        return await start(update, context)
 
 async def show_products(update: Update, user_id: int) -> None:
-    products = ["Product 1", "Product 2", "Product 3"]
-    keyboard = [[KeyboardButton(p)] for p in products]
+    keyboard = [[KeyboardButton(p)] for p in get_products()]
     await update.message.reply_text(
         "Выберите продукт:",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True,
+                                         one_time_keyboard=True),
     )
+    return True
 
 
 async def create_order(update: Update, user_id: int, product: str) -> None:
@@ -108,11 +129,13 @@ async def create_order(update: Update, user_id: int, product: str) -> None:
             keyboard = [[KeyboardButton(f"Оплатить {product}")]]
             await update.message.reply_text(
                 f"Заказ {order_id} создан!",
-                reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+                reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True,
+                                                 one_time_keyboard=True),
             )
+            return True
     except requests.exceptions.RequestException as e:
-        await update.message.reply_text("Ошибка соединения с сервером")
-
+        await update.message.reply_text(f"Ошибка соединения с сервером {e}")
+    return False
 
 async def show_orders(update: Update, user_id: int) -> None:
     try:
@@ -123,11 +146,15 @@ async def show_orders(update: Update, user_id: int) -> None:
                 msg = "Ваши заказы:\n" + "\n".join(
                     [f"{o['id']}: {o['product']} ({o['status']})" for o in orders]
                 )
-                await update.message.reply_text(msg)
+                await update.message.reply_text(
+                    msg)
+                return True
             else:
-                await update.message.reply_text("Заказов нет")
-    except requests.exceptions.RequestException:
-        await update.message.reply_text("Ошибка получения заказов")
+                await update.message.reply_text(
+                    "Заказов нет")
+    except requests.exceptions.RequestException as e:
+        await update.message.reply_text(f"Ошибка получения заказов {e}")
+    return False
 
 
 async def start_refund(update: Update, user_id: int) -> None:
@@ -136,19 +163,19 @@ async def start_refund(update: Update, user_id: int) -> None:
         if response.status_code == 200:
             refundable = [o for o in response.json() if o["status"] == "paid"]
             if refundable:
-                keyboard = [[KeyboardButton(f"REFUND_{o['id']}")] for o in refundable]
+                keyboard = [[KeyboardButton(f"{o['id']}")] for o in refundable]
                 await update.message.reply_text(
                     "Выберите заказ для возврата:",
                     reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
                 )
             else:
                 await update.message.reply_text("Нет доступных заказов для возврата")
-    except requests.exceptions.RequestException:
-        await update.message.reply_text("Ошибка получения заказов")
+    except requests.exceptions.RequestException as e:
+        await update.message.reply_text(f"Ошибка получения заказов {e}")
 
 
 async def process_refund(update: Update, user_id: int, text: str) -> None:
-    order_id = text.split("_")[1]
+    order_id = text
     try:
         response = requests.post(
             f"{API_URL}/refund", json={"user_id": user_id, "order_id": order_id}
@@ -158,11 +185,9 @@ async def process_refund(update: Update, user_id: int, text: str) -> None:
             return True
         else:
             await update.message.reply_text("Ошибка возврата")
-            return False
-    except requests.exceptions.RequestException:
-        await update.message.reply_text("Ошибка соединения с сервером")
-        return False
-
+    except requests.exceptions.RequestException as e:
+        await update.message.reply_text(f"Ошибка соединения с сервером {e}")
+    return False
 
 def main() -> None:
     application = Application.builder().token(
