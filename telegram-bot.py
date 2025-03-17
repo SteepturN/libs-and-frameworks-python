@@ -143,12 +143,19 @@ async def show_orders(update: Update, user_id: int) -> None:
         if response.status_code == 200:
             orders = response.json()
             if orders:
-                msg = "Ваши заказы:\n" + "\n".join(
-                    [f"{o['id']}: {o['product']} ({o['status']})" for o in orders]
-                )
-                await update.message.reply_text(
-                    msg)
-                return True
+                await update.message.reply_text("Ваши заказы:")
+                for order in orders:
+                    msg = (
+                        f"time: {order['time']}\nid: {order['id']}:\nproduct: " +
+                        f"{order['product']}\nstatus: ({order['status']})"
+                    )
+                    button = [
+                        [InlineKeyboardButton(
+                            text=f"copy id",
+                            copy_text=CopyTextButton(order['id']))]
+                    ]
+                    await update.message.reply_text(
+                        msg, reply_markup=InlineKeyboardMarkup(button))
             else:
                 await update.message.reply_text(
                     "Заказов нет")

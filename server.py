@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Dict, List
 import uuid
 import uvicorn
-
+import datetime
 app = FastAPI()
 
 # Mock database
@@ -49,6 +49,7 @@ async def create_order(order_data: OrderCreate):
         "product": order_data.product,
         "status": "paid",
         "price": price,
+        "time": datetime.datetime.now(),
     }
     return {"order_id": order_id}
 
@@ -73,5 +74,5 @@ async def refund_order(refund_data: OrderRefund):
     return {"status": "refund_processed"}
 
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=5001)
+# if __name__ == "__main__":
+#     uvicorn.run(app, host="127.0.0.1", port=5001)
