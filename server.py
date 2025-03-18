@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 from typing import Dict, List
 import uuid
 import uvicorn
@@ -41,7 +42,8 @@ async def create_order(order_data: OrderCreate):
     price = get_order_price(order_data.product)
 
     if not process_payment(order_data.user_id, price):
-        raise HTTPException(status_code=400, detail="Payment failed")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Payment failed")
 
     orders_db[order_id] = {
         "id": order_id,
@@ -51,7 +53,8 @@ async def create_order(order_data: OrderCreate):
         "price": price,
         "time": datetime.datetime.now(),
     }
-    return {"order_id": order_id}
+    return JSONResponse(content={"order_id": order_id},
+                        status_code=status.HTTP_200_OK)
 
 
 @app.get("/api/orders")
