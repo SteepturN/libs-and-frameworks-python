@@ -82,6 +82,7 @@ def check_recurrent_payments(payment_processor):
     while True:
         try:
             subscriptions = bd.get_active_subscriptions()
+            print("active and not failed subscriptions:", len(subscriptions))
             for sub in subscriptions:
                 logger.info(dict(sub))
                 now = datetime.now()
@@ -96,6 +97,7 @@ def check_recurrent_payments(payment_processor):
                     print(f'not yet: {now} {next_payment}')
             # Проверка подписок с ошибками
             failed_subs = bd.get_failed_subscriptions()
+            print("failed subscriptions:", len(failed_subs))
             for sub in failed_subs:
                 error_time = datetime.fromisoformat(sub['last_error_message'])
                 if (

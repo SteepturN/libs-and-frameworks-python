@@ -38,7 +38,7 @@ def save_payment_data(payment_data: Dict[str, Any]):
         )
         if payment_method.get('saved'):
             locate = bd.get_orders(
-                'payment_method_id', payment_method.get('id'), table='subscriptions')[0]
+                'payment_method_id', payment_method.get('id'), table='subscriptions')
             if not locate:
                 bd.subscriptions_insert(
                     payment_method.get('id'),
@@ -56,7 +56,7 @@ def save_payment_data(payment_data: Dict[str, Any]):
             else:
                 print('saved recurrent already in database')
     except Exception as e:
-        logger.error(f"Database error: {str(e)}")
+        logger.error(f"Database error: {traceback.format_exception(e)}")
 
 def update_refund_status(payment_id: str):
     try:
