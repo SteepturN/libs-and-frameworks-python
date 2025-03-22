@@ -7,7 +7,8 @@ from telegram import Bot
 from typing import Dict, Any
 from pprint import pprint
 import bd
-from server_data import TELEGRAM_BOT_TOKEN
+import os
+TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 
 app = FastAPI()
 logger = logging.getLogger(__name__)

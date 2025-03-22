@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import sqlite3
 from contextlib import closing
-
-from server_data import DATABASE_NAME
+import os
+DATABASE_NAME = os.environ["DATABASE_NAME"]
 
 
 def dict_factory(cursor, row):

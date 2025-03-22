@@ -18,14 +18,14 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 import requests
-import json
+import os
+SERVER_API_URL = os.environ["SERVER_API_URL"]
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-from server_data import SERVER_API_URL
 
 # Состояния диалога
 STATE_MAIN = "main"

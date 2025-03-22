@@ -7,7 +7,10 @@ from fastapi.responses import JSONResponse
 import yookassa_api
 from check_for_recurrent import start_recurrent_checker
 import bd
-from server_data import API_KEY, SHOP_ID, URL
+import os
+API_KEY = os.environ["API_KEY"]
+SHOP_ID = os.environ["SHOP_ID"]
+URL = os.environ["URL"]
 
 payment_processor = yookassa_api.PaymentProcessor(SHOP_ID, API_KEY, URL)
 

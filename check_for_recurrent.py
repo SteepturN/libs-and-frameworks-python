@@ -9,12 +9,13 @@ from fastapi import FastAPI, HTTPException, status
 import requests
 from yookassa_api import PaymentProcessor
 import bd
+import os
+
 logger = logging.getLogger(__name__)
-from server_data import (
-    RECURRENT_PAYMENT_CHECK_INTERVAL,
-    RECURRENT_PAYMENT_RETRY_FAILED_PAYMENT_INTERVAL,
-    NOTIFICATION_API_URL
-)
+
+RECURRENT_PAYMENT_CHECK_INTERVAL = os.environ["RECURRENT_PAYMENT_CHECK_INTERVAL"]
+RECURRENT_PAYMENT_RETRY_FAILED_PAYMENT_INTERVAL = os.environ["RECURRENT_PAYMENT_RETRY_FAILED_PAYMENT_INTERVAL"]
+NOTIFICATION_API_URL = os.environ["NOTIFICATION_API_URL"]
 # payment_processor = yookassa_api.PaymentProcessor(SHOP_ID, API_KEY, URL)
 
 
