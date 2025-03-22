@@ -34,9 +34,11 @@ def process_recurrent_payment(subscription: dict, payment_processor: PaymentProc
 
         if not order or order['status'] == 'canceled':
             bd.update_subscription_error(
-                datetime.now().isoformat(), subscription['payment_method_id'])
-            update_subscription_error(subscription, 'order cancelled',
-                                      message_type="error" if not order else "failure")
+                time=datetime.now().isoformat(),
+                payment_id=subscription['payment_method_id'])
+            update_subscription_error(
+                subscription, 'order cancelled',
+                message_type="error" if not order else "failure")
         else:
             bd.update_subscription_success(
                 datetime.now().isoformat(), subscription['payment_method_id'])

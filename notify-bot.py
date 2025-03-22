@@ -20,37 +20,39 @@ class WebhookData(BaseModel):
     event: str
     object: Dict[str, Any]
 
-def save_payment_data(payment_data: Dict[str, Any]):
+def save_payment_d(payment_data: Dict[str, Any]):
     try:
         payment_method = payment_data.get('payment_method', {})
         if not (chat_id := payment_data.get('merchant_customer_id')):
             chat_id = payment_data.get('metadata', {}).get('chat_id')
         bd.payments_insert(
-            payment_data.get('id'),
-            chat_id,
-            payment_data.get('amount', {}).get('value'),
-            payment_data.get('amount', {}).get('currency'),
-            payment_data.get('status'),
-            payment_data.get('description'),
-            payment_method.get('id'),
-            payment_method.get('saved', False),
-            datetime.datetime.now().isoformat()
+            id=payment_data.get('id'),
+            chat_id=chat_id,
+            price=payment_data.get('amount', {}).get('value'),
+            currency=payment_data.get('amount', {}).get('currency'),
+            status=payment_data.get('status'),
+            product=payment_data.get('description'),
+            payment_method_id=payment_method.get('id'),
+            is_recurrent=payment_method.get('saved', False),
+            created_at=datetime.datetime.now().isoformat()
         )
         if payment_method.get('saved'):
             locate = bd.get_orders(
-                'payment_method_id', payment_method.get('id'), table='subscriptions')
+                search_name='payment_method_id',
+                search_id=payment_method.get('id'),
+                table='subscriptions')
             if not locate:
                 bd.subscriptions_insert(
-                    payment_method.get('id'),
-                    chat_id,
-                    True,
-                    datetime.datetime.now().isoformat(),
-                    None,
-                    datetime.datetime.now().isoformat(),
-                    payment_data.get('metadata', {}).get('payment_interval', 60),
-                    payment_data.get('amount', {}).get('value'),
-                    payment_data.get('amount', {}).get('currency'),
-                    payment_data.get('description'),
+                    payment_method_id=payment_method.get('id'),
+                    chat_id=chat_id,
+                    saved=True,
+                    last_payment=datetime.datetime.now().isoformat(),
+                    last_error_message=None,
+                    started=datetime.datetime.now().isoformat(),
+                    interval=payment_data.get('metadata', {}).get('payment_interval', 60),
+                    amount=payment_data.get('amount', {}).get('value'),
+                    currency=payment_data.get('amount', {}).get('currency'),
+                    description=payment_data.get('description'),
                 )
                 print('saved recurrent added to database')
             else:
@@ -121,7 +123,9 @@ async def process_webhook(request: Request):
         if chat_id is None:
             logger.error(f"chat id is missing: {chat_id} {webhook_data}")
             payment_id = payment_data.get('payment_id')
-            chat_id = bd.get_orders(search_name='id', search_id=payment_id, num='one')['chat_id']
+            chat_id = bd.get_orders(search_name='id',
+                                    search_id=payment_id,
+                                    num='one')['chat_id']
         else:
             logger.error(f"chat id was received: {chat_id} {webhook_data}")
         print(f'chat id: {chat_id}')

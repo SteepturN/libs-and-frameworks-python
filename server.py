@@ -51,15 +51,15 @@ async def create_order(order_data: OrderCreate):
                             detail="Payment failed")
 
     bd.payments_insert(
-        order['id'],
-        order_data.chat_id,
-        price,
-        "RUB",
-        order['status'],
-        f"product:{order_data.product}",
-        None,
-        False,
-        datetime.datetime.now())
+        id=order['id'],
+        chat_id=order_data.chat_id,
+        price=price,
+        currency="RUB",
+        status=order['status'],
+        product=f"product:{order_data.product}",
+        payment_method_id=None,
+        is_recurrent=False,
+        created_at=datetime.datetime.now())
     return JSONResponse(content={"id": order['id'],
                                  "link": order['confirmation_url']},
                         status_code=status.HTTP_200_OK)
@@ -67,7 +67,7 @@ async def create_order(order_data: OrderCreate):
 
 @app.get("/api/orders")
 async def get_orders(chat_id: int):
-    orders = bd.get_orders('chat_id', chat_id)
+    orders = bd.get_orders(search_name='chat_id', search_id=chat_id)
     res = []
     for order in orders:
         res.append({"time": order['created_at'], "id": order['id'],
@@ -80,7 +80,7 @@ async def get_orders(chat_id: int):
 @app.post("/api/refund")
 async def refund_order(refund_data: OrderRefund):
 
-    order = bd.get_orders('id', refund_data.order_id)[0]
+    order = bd.get_orders(search_name='id', search_id=refund_data.order_id)[0]
     if not order:
         print("Order not found")
         raise HTTPException(status_code=404, detail="Order not found")
