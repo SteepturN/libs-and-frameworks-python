@@ -1,18 +1,18 @@
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel
+import traceback
 import datetime
 import logging
-import sqlite3
-from contextlib import closing
 from telegram import Bot
 from typing import Dict, Any
 from pprint import pprint
+import bd
+from server_data import TELEGRAM_BOT_TOKEN
+
 app = FastAPI()
 logger = logging.getLogger(__name__)
-TELEGRAM_BOT_TOKEN = "7567195140:AAHAFnyTM9V5s7A5sQYiOcv5B_GLl1CF-HQ"
 
 # Database setup
-DATABASE_NAME = "payments.db"
 
 
 class WebhookData(BaseModel):
@@ -22,73 +22,45 @@ class WebhookData(BaseModel):
 
 def save_payment_data(payment_data: Dict[str, Any]):
     try:
-        with closing(sqlite3.connect(DATABASE_NAME)) as conn:
-            cursor = conn.cursor()
-            payment_method = payment_data.get('payment_method', {})
-            num = cursor.execute('select count(*) from payments')
-            print('payments num: ', num.fetchone())
-
-            num = cursor.execute('select * from payments')
-            print('all payments: ')
-            pprint(num.fetchall())
-
-            if not (chat_id := payment_data.get('merchant_customer_id')):
-                chat_id = payment_data.get('metadata', {}).get('chat_id')
-            cursor.execute('''
-                INSERT OR REPLACE INTO payments
-                (id, chat_id, amount, currency, status, description,
-                 payment_method_id, is_recurrent, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                payment_data.get('id'),
-                chat_id,
-                payment_data.get('amount', {}).get('value'),
-                payment_data.get('amount', {}).get('currency'),
-                payment_data.get('status'),
-                payment_data.get('description'),
-                payment_method.get('id'),
-                payment_method.get('saved', False),
-                datetime.datetime.now().isoformat()
-            ))
-
-            if payment_method.get('saved'):
-                locate = cursor.execute(
-                    f'select * from subscriptions where payment_method_id = "{payment_method.get('id')}"')
-                if not locate.fetchone():
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO subscriptions
-                        (payment_method_id, chat_id, saved, last_payment,
-                        last_error_message, started, interval, amount,
-                        currency, description)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        payment_method.get('id'),
-                        chat_id,
-                        True,
-                        datetime.datetime.now().isoformat(),
-                        None,
-                        datetime.datetime.now().isoformat(),
-                        payment_data.get('metadata', {}).get('payment_interval', 60),
-                        payment_data.get('amount', {}).get('value'),
-                        payment_data.get('amount', {}).get('currency'),
-                        payment_data.get('description'),
-                    ))
-                    print('saved recurrent added to database')
-                else:
-                    print('saved recurrent already in database')
-            conn.commit()
+        payment_method = payment_data.get('payment_method', {})
+        if not (chat_id := payment_data.get('merchant_customer_id')):
+            chat_id = payment_data.get('metadata', {}).get('chat_id')
+        bd.payments_insert(
+            payment_data.get('id'),
+            chat_id,
+            payment_data.get('amount', {}).get('value'),
+            payment_data.get('amount', {}).get('currency'),
+            payment_data.get('status'),
+            payment_data.get('description'),
+            payment_method.get('id'),
+            payment_method.get('saved', False),
+            datetime.datetime.now().isoformat()
+        )
+        if payment_method.get('saved'):
+            locate = bd.get_orders(
+                'payment_method_id', payment_method.get('id'), table='subscriptions')[0]
+            if not locate:
+                bd.subscriptions_insert(
+                    payment_method.get('id'),
+                    chat_id,
+                    True,
+                    datetime.datetime.now().isoformat(),
+                    None,
+                    datetime.datetime.now().isoformat(),
+                    payment_data.get('metadata', {}).get('payment_interval', 60),
+                    payment_data.get('amount', {}).get('value'),
+                    payment_data.get('amount', {}).get('currency'),
+                    payment_data.get('description'),
+                )
+                print('saved recurrent added to database')
+            else:
+                print('saved recurrent already in database')
     except Exception as e:
         logger.error(f"Database error: {str(e)}")
 
 def update_refund_status(payment_id: str):
     try:
-        with closing(sqlite3.connect(DATABASE_NAME)) as conn:
-            conn.execute('''
-                UPDATE payments
-                SET status = 'refunded'
-                WHERE id = ?
-            ''', (payment_id,))
-            conn.commit()
+        bd.update_set_refund_status(payment_id)
     except Exception as e:
         logger.error(f"Refund update error: {str(e)}")
 
@@ -148,15 +120,11 @@ async def process_webhook(request: Request):
             chat_id = payment_data.get('metadata', {}).get('chat_id')
         if chat_id is None:
             logger.error(f"chat id is missing: {chat_id} {webhook_data}")
-            with closing(sqlite3.connect(DATABASE_NAME)) as conn:
-                cursor = conn.cursor()
-                payment_id = payment_data.get('payment_id')
-                # payment_id = payment_data.get('id')
-                cursor.execute(f"select chat_id from payments where id = \"{payment_id}\"")
-                chat_id = cursor.fetchone()[0]
+            payment_id = payment_data.get('payment_id')
+            chat_id = bd.get_orders(search_name='id', search_id=payment_id, num='one')['chat_id']
         else:
             logger.error(f"chat id was received: {chat_id} {webhook_data}")
-
+        print(f'chat id: {chat_id}')
         try:
             async with Bot(TELEGRAM_BOT_TOKEN) as bot:
                 await bot.send_message(
@@ -169,7 +137,7 @@ async def process_webhook(request: Request):
         return response
 
     except Exception as e:
-        logger.error(f"Webhook processing error: {str(e)}")
+        logger.error(f"Webhook processing error: {traceback.format_exception(e)}")
         return {"status": "error", "details": str(e)}
 
 

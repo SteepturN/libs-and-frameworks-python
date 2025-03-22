@@ -25,7 +25,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-API_URL = "http://127.0.0.1:5001/api"
+from server_data import SERVER_API_URL
 
 # Состояния диалога
 STATE_MAIN = "main"
@@ -212,7 +212,7 @@ async def create_recurrent_payment(update: Update, context: CallbackContext, pro
 
         # Вызов API для создания рекуррентного платежа
         response = requests.post(
-            f"{API_URL}/recurrent-payments",
+            f"{SERVER_API_URL}/recurrent-payments",
             json=payload
         )
         if response.status_code == 200:
@@ -231,7 +231,7 @@ async def create_recurrent_payment(update: Update, context: CallbackContext, pro
 async def create_order(update: Update, chat_id: int, product: str) -> bool:
     try:
         response = requests.post(
-            f"{API_URL}/create_order", json={"chat_id": chat_id, "product": product}
+            f"{SERVER_API_URL}/create_order", json={"chat_id": chat_id, "product": product}
         )
         
         if response.status_code == 200:
@@ -255,7 +255,7 @@ async def show_recurrent_products(update: Update, chat_id: int) -> bool:
 
 async def show_orders(update: Update, chat_id: int) -> bool:
     try:
-        response = requests.get(f"{API_URL}/orders?chat_id={chat_id}")
+        response = requests.get(f"{SERVER_API_URL}/orders?chat_id={chat_id}")
         if response.status_code != 200:
             await update.effective_user.send_message(
                 "Заказов нет")
@@ -292,7 +292,7 @@ async def show_orders(update: Update, chat_id: int) -> bool:
 
 async def start_refund(update: Update, chat_id: int) -> bool:
     try:
-        response = requests.get(f"{API_URL}/orders?chat_id={chat_id}")
+        response = requests.get(f"{SERVER_API_URL}/orders?chat_id={chat_id}")
         if response.status_code == 200:
             refundable = [o for o in response.json() if o["status"] == "succeeded"]
             if refundable:
@@ -311,7 +311,7 @@ async def start_refund(update: Update, chat_id: int) -> bool:
 async def process_refund(update: Update, chat_id: int, order_id: str) -> bool:
     try:
         response = requests.post(
-            f"{API_URL}/refund", json={"chat_id": chat_id, "order_id": order_id}
+            f"{SERVER_API_URL}/refund", json={"chat_id": chat_id, "order_id": order_id}
         )
         if response.status_code == 200:
             await update.effective_user.send_message(f"Возврат для заказа {order_id} запущен")

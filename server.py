@@ -1,78 +1,21 @@
 #!/usr/bin/env python3
 from pydantic import BaseModel
-import uuid
-from datetime import datetime, timedelta
-from typing import Dict, Optional
-
-from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel
-from fastapi.responses import JSONResponse
-import uuid
 import datetime
+from typing import Dict, Optional
+from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import JSONResponse
 import yookassa_api
-import sqlite3
-from contextlib import closing
 from check_for_recurrent import start_recurrent_checker
+import bd
+from server_data import API_KEY, SHOP_ID, URL
 
-
-API_KEY="test_MUPhjN2Ti23BskNgqzAltDiI-21G0KLMncGkrtaxn1I"
-SHOP_ID="1055267"
-URL="https://rnmgv-5-228-83-118.a.free.pinggy.link" + "/webhook"
 payment_processor = yookassa_api.PaymentProcessor(SHOP_ID, API_KEY, URL)
-
-
-DATABASE_NAME = "payments.db"
-
 
 
 app = FastAPI()
 
-# Mock database
-with closing(sqlite3.connect(DATABASE_NAME)) as conn:
-    conn.execute('''CREATE TABLE IF NOT EXISTS payments
-                    (id TEXT PRIMARY KEY,
-                    chat_id TEXT,
-                    amount REAL,
-                    currency TEXT,
-                    status TEXT,
-                    description TEXT,
-                    payment_method_id TEXT,
-                    is_recurrent BOOLEAN,
-                    refunded BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP
-                    );''')
-
-    conn.execute('''CREATE TABLE IF NOT EXISTS subscriptions
-                    (payment_method_id TEXT PRIMARY KEY,
-                    chat_id TEXT,
-                    saved BOOLEAN,
-                    last_payment TIMESTAMP,
-                    last_error_message TIMESTAMP,
-                    started TIMESTAMP,
-                    interval INT,
-                    amount REAL,
-                    currency TEXT,
-                    description TEXT
-                    );''')
-    # interval should be month maybe
-    conn.commit()
 
 start_recurrent_checker(payment_processor)
-
-def payments_insert(id, chat_id, price, currency, status,
-                    product, payment_method_id, is_recurrent, created_at):
-    with closing(sqlite3.connect(DATABASE_NAME)) as conn:
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            INSERT OR REPLACE INTO payments
-            (id, chat_id, amount, currency, status, description,
-                payment_method_id, is_recurrent, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (id, chat_id, price, currency, status,
-              product, payment_method_id, is_recurrent, created_at
-        ))
-        conn.commit()
 
 
 
@@ -107,7 +50,7 @@ async def create_order(order_data: OrderCreate):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Payment failed")
 
-    payments_insert(
+    bd.payments_insert(
         order['id'],
         order_data.chat_id,
         price,
@@ -121,20 +64,10 @@ async def create_order(order_data: OrderCreate):
                                  "link": order['confirmation_url']},
                         status_code=status.HTTP_200_OK)
 
-def dict_factory(cursor, row):
-    fields = [column[0] for column in cursor.description]
-    return {key: value for key, value in zip(fields, row)}
 
 @app.get("/api/orders")
 async def get_orders(chat_id: int):
-    with closing(sqlite3.connect(DATABASE_NAME)) as conn:
-        conn.row_factory = dict_factory
-
-        cursor = conn.cursor()
-
-        orders = cursor.execute(
-            f"select * from payments where chat_id = {chat_id}")
-        orders = orders.fetchall()
+    orders = bd.get_orders('chat_id', chat_id)
     res = []
     for order in orders:
         res.append({"time": order['created_at'], "id": order['id'],
@@ -146,13 +79,8 @@ async def get_orders(chat_id: int):
 
 @app.post("/api/refund")
 async def refund_order(refund_data: OrderRefund):
-    with closing(sqlite3.connect(DATABASE_NAME)) as conn:
-        conn.row_factory = dict_factory
-        cursor = conn.cursor()
 
-        order = cursor.execute(f"select * from payments where id = \"{refund_data.order_id}\"")
-        order = order.fetchall()
-    order = order[0]
+    order = bd.get_orders('id', refund_data.order_id)[0]
     if not order:
         print("Order not found")
         raise HTTPException(status_code=404, detail="Order not found")

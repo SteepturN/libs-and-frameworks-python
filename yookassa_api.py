@@ -104,7 +104,7 @@ class PaymentProcessor:
             }
         except Exception as e:
             logger.error(f"Refund creation failed: {str(e)}")
-            raise
+            return e
 
 # Example usage
 if __name__ == '__main__':
